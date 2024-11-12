@@ -1,0 +1,32 @@
+	-- tree select
+	WITH GradeTree (ID
+	, ParentID
+	, Label
+	, TreeLevel
+	, Sort
+	) AS (
+  	  SELECT ID
+  	  , ParentID
+  	  , GradePart
+  	  , 1 AS TreeLevel
+  	  , CONVERT(VARCHAR(4000), GradePart) AS Sort
+  	  FROM dbo.GradeCalculator
+  	  WHERE ParentID IS NULL
+
+  	  UNION ALL
+
+  	  SELECT t1.ID
+  	  , t1.ParentID
+  	  , t1.GradePart
+  	  , t2.TreeLevel + 1 AS TreeLevel
+  	  , CONVERT(VARCHAR(4000), t2.Sort + '|' + t1.GradePart) AS Sort
+  	  FROM GradeTree t2
+  	  JOIN dbo.GradeCalculator t1 ON t1.ParentID = t2.ID
+	)
+	SELECT ID
+	, ParentID
+	, REPLICATE('    ', TreeLevel - 1) + GradeTree.Label
+	, TreeLevel
+	, Sort
+	FROM GradeTree
+	ORDER BY Sort;
