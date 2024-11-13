@@ -1,0 +1,80 @@
+USE [GSSScratch]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER TRIGGER [dbo].[tr_d_GradeCalculator] ON [dbo].[GradeCalculator]
+    INSTEAD OF DELETE
+AS
+/*	----------------------------------------------------------------------------------------------------
+	Description
+	----------------------------------------------------------------------------------------------------
+	Re-calculate grade after data deletion
+	----------------------------------------------------------------------------------------------------
+	Test
+	----------------------------------------------------------------------------------------------------
+
+	-- SELECT * FROM Deleted  -- old data
+	-- SELECT * FROM Inserted -- new data
+	SELECT * FROM dbo.GradeLogFile ORDER BY ModificationDateTime
+
+	DROP TABLE dbo.GradeLogFile
+
+	INSERT INTO dbo.GradeCalculator (ID, ParentID, TypeID, GradePart, WorkDate, GradePartWeight, Grade) 
+	VALUES (80010, 33123, 645, 'Test 4', NULL, 0.1, NULL);
+
+	UPDATE dbo.GradeCalculator SET GradePart = 'Test 4b', Grade = 2.0 WHERE ID = 80010;
+	UPDATE dbo.GradeCalculator SET GradePartWeight = 0.1 WHERE ID = 42225;
+
+	DELETE FROM dbo.GradeCalculator WHERE ID = 80010;
+
+	SELECT * FROM dbo.GradeCalculator
+
+	----------------------------------------------------------------------------------------------------
+	Modifications
+	----------------------------------------------------------------------------------------------------
+	---------------------------------------------------------------------------------------------------- 
+*/
+BEGIN
+	-- single data record only:
+	-- DECLARE @GradeCalculatorID INT;
+	-- SELECT @GradeCalculatorID = ID FROM Inserted;
+	-- EXEC dbo.sp_COP_CalculateGrade @GradeCalculatorID;
+	 DECLARE @ParentID INT;
+
+	-- avoid recursion
+	IF ((SELECT TRIGGER_NESTLEVEL(OBJECT_ID('tr_d_GradeCalculator'))) > 1) RETURN;
+
+	DECLARE @MyCursor CURSOR;
+	DECLARE @FetchStatus INT;
+	DECLARE @GradeCalculatorID INTEGER;
+
+	SET @MyCursor = CURSOR LOCAL SCROLL FOR
+		SELECT ID FROM Deleted;
+	OPEN @MyCursor;
+
+	FETCH NEXT FROM @MyCursor INTO @GradeCalculatorID;
+	SET @FetchStatus = @@FETCH_STATUS;
+	WHILE @FetchStatus = 0 BEGIN
+		-- find parent and update this node and its parents:
+		SELECT @ParentID = ParentID FROM dbo.GradeCalculator WHERE ID = @GradeCalculatorID;
+
+		EXEC dbo.sp_COP_CalculateGrade @ParentID;
+
+		DELETE FROM dbo.GradeCalculator WHERE ID = @GradeCalculatorID;
+		
+		INSERT INTO dbo.GradeLogFile (ModificationDateTime, 
+		ModificationType, 
+		WorkID, 
+		Remarks)
+		SELECT GETDATE(), 'D', @GradeCalculatorID, 'deleted';
+
+		FETCH NEXT FROM @MyCursor INTO @GradeCalculatorID;
+		SET @FetchStatus = @@FETCH_STATUS
+	END;
+
+	CLOSE @MyCursor;
+	DEALLOCATE @MyCursor;
+END;
