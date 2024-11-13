@@ -1,0 +1,8 @@
+
+ALTER TABLE [dbo].[GradeCalculator] WITH NOCHECK ADD CONSTRAINT [FK_GradeCalculator_GradeType] FOREIGN KEY([TypeID])
+REFERENCES [dbo].[GradeType] ([TypeID])
+NOT FOR REPLICATION 
+GO
+
+ALTER TABLE [dbo].[GradeCalculator] NOCHECK CONSTRAINT [FK_GradeCalculator_GradeType]
+GO
