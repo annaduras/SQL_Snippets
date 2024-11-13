@@ -1,0 +1,83 @@
+USE [GSSScratch]
+GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER TRIGGER [dbo].[tr_iu_GradeCalculator] ON [dbo].[GradeCalculator]
+    FOR INSERT, UPDATE
+AS
+/*	----------------------------------------------------------------------------------------------------
+	Description
+	----------------------------------------------------------------------------------------------------
+	Re-calculate grade after data change
+
+	----------------------------------------------------------------------------------------------------
+	Test
+	----------------------------------------------------------------------------------------------------
+
+	-- SELECT * FROM Deleted  -- old data
+	-- SELECT * FROM Inserted -- new data
+	SELECT * FROM dbo.GradeLogFile ORDER BY ModificationDateTime
+
+	DROP TABLE dbo.GradeLogFile
+
+	INSERT INTO dbo.GradeCalculator (ID, ParentID, TypeID, GradePart, WorkDate, GradePartWeight, Grade) 
+	VALUES (80011, 33123, 645, 'Test 5', NULL, 0.1, NULL);
+
+	UPDATE dbo.GradeCalculator SET GradePart = 'Test 4b', Grade = 1.75 WHERE ID = 80010;
+	UPDATE dbo.GradeCalculator SET GradePartWeight = 0.1 WHERE ID = 42225;
+
+	DELETE FROM dbo.GradeCalculator WHERE ID = 80010;
+
+	SELECT * FROM dbo.GradeCalculator
+
+	----------------------------------------------------------------------------------------------------
+	Modifications
+	----------------------------------------------------------------------------------------------------
+	---------------------------------------------------------------------------------------------------- 
+*/
+BEGIN
+	-- single data record only:
+	-- DECLARE @GradeCalculatorID INT;
+	-- SELECT @GradeCalculatorID = ID FROM Inserted;
+	-- EXEC dbo.sp_COP_CalculateGrade @GradeCalculatorID;
+
+	DECLARE @MyCursor CURSOR;
+	DECLARE @FetchStatus INT;
+	DECLARE @GradeCalculatorID INTEGER;
+	DECLARE @Updated BIT;
+	DECLARE @CalculatedGrade DECIMAL(20,18);
+
+	SET @MyCursor = CURSOR LOCAL SCROLL FOR
+		SELECT ID, Inserted.CalculatedGrade FROM Inserted
+		UNION
+		SELECT ID, -1.0 AS CalculatedGrade FROM Deleted;
+	OPEN @MyCursor;
+
+	FETCH NEXT FROM @MyCursor INTO @GradeCalculatorID, @CalculatedGrade;
+	SET @FetchStatus = @@FETCH_STATUS;
+	WHILE @FetchStatus = 0 BEGIN
+--		IF (ISNULL(@CalculatedGrade, 0.0) > 0) BREAK;
+
+		EXEC dbo.sp_COP_CalculateGrade @GradeCalculatorID;
+/*
+		-- check if update or insert
+		SELECT TOP 1 @Updated = 1 FROM Deleted WHERE ID = @GradeCalculatorID;
+		IF (@Updated = 1) BEGIN
+			INSERT INTO dbo.GradeLogFile (ModificationDateTime, ModificationType, WorkID, Remarks)
+			SELECT GETDATE(), 'Trigger IU', @GradeCalculatorID, 'updated'
+		END
+		ELSE BEGIN
+			INSERT INTO dbo.GradeLogFile (ModificationDateTime, ModificationType, WorkID, Remarks)
+			SELECT GETDATE(), 'Trigger IU', @GradeCalculatorID, 'inserted'
+		END;
+*/		
+		FETCH NEXT FROM @MyCursor INTO @GradeCalculatorID, @CalculatedGrade;
+		SET @FetchStatus = @@FETCH_STATUS
+	END;
+
+	CLOSE @MyCursor;
+	DEALLOCATE @MyCursor;
+END;
