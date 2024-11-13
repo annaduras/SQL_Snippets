@@ -1,6 +1,6 @@
 # SQL_Snippets Repository
 
-This repository is a personal collection of code snippets that I've found useful in my journey as a beginner in programming. It serves as a quick reference guide and a showcase of what I've learned.
+This repository is a personal collection of code snippets that I've found useful in my journey as a beginner in SQL programming. It serves as a quick reference guide and a showcase of what I've learned.
 
 ## What's Inside
 
